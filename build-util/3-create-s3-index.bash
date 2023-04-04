@@ -145,10 +145,11 @@ The same installer can also be installed on Linux.
      </ul></li>
 <li> See the latest <a href="https://software.openwaterfoundation.org/tstool-madis-plugin/latest/doc-user/appendix-install/install/">TSTool MADIS Plugin installation documentation</a>
      for installation information (or follow a link below for specific version documentation).</li>
-<li>The TSTool MADIS Plugin requires that TSTool is also installed if not already installed:</li>
+<li>The TSTool MADIS Plugin requires that TSTool is also installed if not already installed:
     <ul>
     <li><a href="https://opencdss.state.co.us/tstool/">Download TSTool</a>.</li>
     </ul>
+    </li>
 <li><b>If clicking on a file download link does not download the file, right-click on the link and use "Save link as..." (or similar).</b></li>
 </ul>
 
