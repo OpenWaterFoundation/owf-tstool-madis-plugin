@@ -79,21 +79,28 @@ createIndexHtmlFiles() {
   # - include Google Analytics for OWF
   indexHtmlTmpFile="/tmp/${USER}-tstool-madis-plugin-index.html"
   s3IndexHtmlUrl="${s3FolderUrl}/index.html"
+  indexFaviconFile="OWF-Logo-Favicon-32x32.png"
+  s3IndexFaviconUrl="${s3FolderUrl}/${indexFaviconFile}"
   echo '<!DOCTYPE html>
-<head>
+<head>' > ${indexHtmlTmpFile}
+  echo "<link rel=\"icon\" type=\"image/x-icon\" href=\"${indexFaviconFile}\">" >> ${indexHtmlTmpFile}
+  echo '
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta charset="utf-8"/>' > ${indexHtmlTmpFile}
-echo "<!-- Global Site Tag (gtag.js) - Google Analytics -->
-<script async src=\"https://www.googletagmanager.com/gtag/js?id=UA-135465513-1\"></script>
+<meta charset="utf-8"/>' >> ${indexHtmlTmpFile}
+
+echo "
+<!-- Start Google Analytics 4 property. -->
+<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-KJFMBY739T\"></script>
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
+gtag('config', 'G-KJFMBY739T');
+</script>
+<!-- End Google Analytics 4 property. -->" >> ${indexHtmlTmpFile}
 
-gtag('config', 'UA-135465513-1');
-</script>" >> ${indexHtmlTmpFile}
 echo '<style>
    body {
      font-family: "Trebuchet MS", Helvetica, sans-serif !important;
@@ -117,9 +124,11 @@ echo '<style>
      padding: 3px;
    }
 </style>
+
 <title>TSTool MADIS Plugin Downloads</title>
-<link rel="icon" type="image/x-icon" href="/images/OWF-Logo-Favicon-32x32.png">
-</head>
+</head>' >> ${indexHtmlTmpFile}
+
+echo '
 <body>
 <h1>Open Water Foundation TSTool MADIS Plugin Software Downloads</h1>
 <p>
@@ -304,6 +313,8 @@ getUserLogin() {
   # Else - not critical since used for temporary files.
 }
 
+#### Start logging functions. ####
+
 # Echo to stderr.
 echoStderr() {
   # If necessary, quote the string to be printed.
@@ -329,6 +340,8 @@ logInfo() {
 logWarning() {
    echoStderr "[WARNING] $@"
 }
+
+#### End logging functions.   ####
 
 # Parse the command parameters:
 # - use the getopt command line program so long options can be handled
@@ -523,6 +536,25 @@ uploadIndexFiles() {
     exit 1
   fi
 
+  # ===========================================================================
+  # Step 6. Upload the favicon file.
+  logInfo "Uploading favicon file."
+  if [ -f "${indexHtmlTmpFile}" ]; then
+    # set -x
+    ${awsExe} s3 cp "web-resources/${indexFaviconFile}" ${s3IndexFaviconUrl} ${dryrun} --profile "${awsProfile}"
+    errorCode=$?
+    # { set +x; } 2> /dev/null
+    if [ ${errorCode} -ne 0 ]; then
+      logError ""
+      logError "Error uploading favicon ${indexFaviconFile} file."
+      exit 1
+    fi
+  else
+    logError ""
+    logError "Favicon file to upload does not exist:  web-resources/${indexFaviconFile}"
+    exit 1
+  fi
+
   # Also invalidate the CloudFront distribution so that new version will be displayed:
   # - see:  https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Invalidation.html
   # Determine the distribution ID:
@@ -568,9 +600,9 @@ uploadIndexFiles() {
   if [ "${operatingSystem}" = "mingw" ]; then
     # The following is needed to avoid MinGW mangling the paths, just in case a path without * is used:
     # - tried to use a variable for the prefix but that did not work
-    MSYS_NO_PATHCONV=1 ${awsExe} cloudfront create-invalidation --distribution-id "${cloudFrontDistributionId}" --paths '/tstool-madis-plugin/index.html' '/tstool-madis-plugin' '/tstool-madis-plugin/' --output json --profile "${awsProfile}" | tee ${tmpFile}
+    MSYS_NO_PATHCONV=1 ${awsExe} cloudfront create-invalidation --distribution-id "${cloudFrontDistributionId}" --paths '/tstool-madis-plugin/index.html' '/tstool-madis-plugin' '/tstool-madis-plugin/' "/tstool-madis-plugin/${indexFaviconFile}" --output json --profile "${awsProfile}" | tee ${tmpFile}
   else
-    ${awsExe} cloudfront create-invalidation --distribution-id "${cloudFrontDistributionId}" --paths '/tstool-madis-plugin/index*' '/tstool-madis-plugin' '/tstool-madis-plugin/' --output json --profile "${awsProfile}" | tee ${tmpFile}
+    ${awsExe} cloudfront create-invalidation --distribution-id "${cloudFrontDistributionId}" --paths '/tstool-madis-plugin/index*' '/tstool-madis-plugin' '/tstool-madis-plugin/' "/tstool-madis-plugin/${indexFaviconFile}" --output json --profile "${awsProfile}" | tee ${tmpFile}
   fi
   #${awsExe} cloudfront create-invalidation --distribution-id ${cloudFrontDistributionId} --paths "/tstool-madis-plugin" --profile "${awsProfile}"
   invalidationId=$(cat ${tmpFile} | grep '"Id":' | cut -d ':' -f 2 | tr -d ' ' | tr -d '"' | tr -d ',')
@@ -581,10 +613,9 @@ uploadIndexFiles() {
     return 1
   else
     logInfo "Success invalidating CloudFront file(s)."
+    # Now wait on the invalidation.
+    waitOnInvalidation ${cloudFrontDistributionId} ${invalidationId}
   fi
-
-  # Now wait on the invalidation.
-  waitOnInvalidation ${cloudFrontDistributionId} ${invalidationId}
 
   return 0
 }
